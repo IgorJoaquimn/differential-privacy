@@ -1,22 +1,48 @@
 from transformers import DistilBertModel, DistilBertTokenizer
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
-def add_non_negative_exponential_noise(vector, original_embedding, epsilon=0.1):
+def sample_gumbel(shape, eps=1e-10):
+    """Sample Gumbel noise with given shape."""
+    U = torch.rand(shape)
+    return -torch.log(-torch.log(U + eps) + eps)
+
+def get_metric_truncated_exponential_mechanism(vectors: torch.Tensor, original_embedding: torch.Tensor, epsilon: float = 0.1) -> torch.Tensor:
     """
-    Adds noise to a vector following a specific procedure:
-    
+    Apply metric-based truncated exponential mechanism with Gumbel noise.
 
     Args:
-        vector (torch.Tensor): The input vector (or tensor of any shape).
-        epsilon (float): The privacy parameter. Smaller epsilon typically means more noise.
+        vectors (torch.Tensor): Input tensor of shape (B, T, D).
+        original_embedding (torch.Tensor): Embedding matrix of shape (V, D).
+        epsilon (float): Privacy parameter (smaller epsilon adds more noise).
 
     Returns:
-        torch.Tensor: The vector with added noise.
+        torch.Tensor: Selected indices of shape (B, T).
     """
- 
-    return vector + torch.abs(torch.randn_like(vector)) * epsilon
+    B, T, D = vectors.shape
+    V = original_embedding.shape[0]
+
+    # Normalize vectors for cosine similarity
+    vectors_norm = F.normalize(vectors.view(B * T, D), p=2, dim=1)     # (B*T, D)
+    embed_norm = F.normalize(original_embedding, p=2, dim=1)            # (V, D)
+
+    # Compute cosine similarity between each vector and each embedding
+    similarity = torch.matmul(vectors_norm, embed_norm.T)               # (B*T, V)
+
+    # Sample Gumbel noise and add scaled noise
+    gumbel_noise = sample_gumbel(similarity.shape).to(similarity.device)
+    noisy_scores = similarity + (2 / epsilon) * gumbel_noise            # (B*T, V)
+
+    # Select index with maximum noisy score for each vector
+    selected_indices = torch.argmax(noisy_scores, dim=1)                # (B*T,)
+
+    # Gather the selected embeddings by index
+    selected_vectors = original_embedding[selected_indices]              # (B*T, D)
+
+    # Reshape back to (B, T, D)
+    return selected_vectors.view(B, T, D)
 
 class NoisyEmbedding(nn.Module):
     def __init__(self, original_embedding, epsilon=0.1):
@@ -25,7 +51,7 @@ class NoisyEmbedding(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, input_ids):
-        return add_non_negative_exponential_noise(self.embedding(input_ids), self.embedding.weight, self.epsilon)
+        return get_metric_truncated_exponential_mechanism(self.embedding(input_ids), self.embedding.weight, self.epsilon)
 
 class TEMModel(nn.Module):
     def __init__(self, model_name="distilbert/distilbert-base-uncased", epsilon=0.1):
