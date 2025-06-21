@@ -87,6 +87,7 @@ class MadlibModel(nn.Module):
         # Replace the word embeddings with noisy embeddings
         self.original_emb = self.model.embeddings.word_embeddings
         self.model.embeddings.word_embeddings = NoisyEmbedding(self.original_emb, epsilon)
-
-    def forward(self, input_ids, attention_mask=None):
-        return self.model(input_ids=input_ids, attention_mask=attention_mask)
+    
+    def forward(self, input_ids, attention_mask=None, **kwargs):
+        # Pass along any extra kwargs (like output_hidden_states)
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
