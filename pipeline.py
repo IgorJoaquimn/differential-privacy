@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from torch.optim import Adam
@@ -9,6 +10,10 @@ from sklearn.metrics import f1_score, accuracy_score
 from transformers import AutoModelForSequenceClassification
 from dataset import MovieDataset
 from opacus import PrivacyEngine
+
+from models.baseline import BaselineModel
+from models.madlib import MadlibModel
+from models.tem import TEMModel
 
 # The functions are defined in the same order as they are usually run in the pipeline.
 
@@ -115,9 +120,28 @@ def save_model(model, path="model.pt"):
     print(f"Model saved to {path}")
 
 
-if __name__ == "__main__":
-    # set_seed()
+def get_model(name, **kwargs):
+    models = {
+        "baseline": BaselineModel,
+        "tem": TEMModel,
+        "madlib": MadlibModel,
+    }
+    
+    if name not in models:
+        raise ValueError(f"Model {name} not supported. Options are: {list(models.keys())}")
+    
+    return models[name](**kwargs)
 
+
+if __name__ == "__main__":
+    # Add model as argument
+    parser = argparse.ArgumentParser(description="Train a movie review classifier")
+    parser.add_argument("--model", type=str, default="baseline",
+                        help="Pretrained model name")
+     
+    args = parser.parse_args()
+    model = get_model(args.model) 
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     num_epochs = 10
@@ -126,8 +150,6 @@ if __name__ == "__main__":
 
     dataset = MovieDataset(max_length=512, train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-    model = AutoModelForSequenceClassification.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', num_labels=dataset.num_labels).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate)
     criterion = CrossEntropyLoss()
