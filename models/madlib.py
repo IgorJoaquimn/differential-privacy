@@ -1,4 +1,4 @@
-from transformers import DistilBertModel, DistilBertTokenizer
+from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
 import torch
 import torch.nn as nn
 
@@ -78,16 +78,16 @@ class NoisyEmbedding(nn.Module):
         return add_non_negative_exponential_noise(self.embedding(input_ids), self.epsilon)
 
 class MadlibModel(nn.Module):
-    def __init__(self, model_name="distilbert/distilbert-base-uncased", epsilon=0.1):
+    def __init__(self, num_labels, model_name="distilbert/distilbert-base-uncased", epsilon=0.1):
         super(MadlibModel, self).__init__()
         self.tokenizer = DistilBertTokenizer.from_pretrained(model_name)
-        self.model = DistilBertModel.from_pretrained(model_name)
+        self.model = DistilBertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
         self.epsilon = epsilon
 
         # Replace the word embeddings with noisy embeddings
-        self.original_emb = self.model.embeddings.word_embeddings
-        self.model.embeddings.word_embeddings = NoisyEmbedding(self.original_emb, epsilon)
-    
+        self.original_emb = self.model.distilbert.embeddings.word_embeddings
+        self.model.distilbert.embeddings.word_embeddings = NoisyEmbedding(self.original_emb, epsilon)
+
     def forward(self, input_ids, attention_mask=None, **kwargs):
         # Pass along any extra kwargs (like output_hidden_states)
         return self.model(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
