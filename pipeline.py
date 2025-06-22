@@ -138,11 +138,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a movie review classifier")
     parser.add_argument("--model", type=str, default="baseline",
                         help="Pretrained model name")
-     
     args = parser.parse_args()
-    model = get_model(args.model) 
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = get_model(args.model).to(device)
 
     num_epochs = 10
     batch_size = 8
