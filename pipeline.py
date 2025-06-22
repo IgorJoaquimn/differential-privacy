@@ -136,7 +136,7 @@ if __name__ == "__main__":
     set_seed(42)
 
     parser = argparse.ArgumentParser(description="Train a movie review classifier")
-    parser.add_argument("--model", type=str, default="baseline",
+    parser.add_argument("--model", type=str, choices=["baseline", "tem", "madlib"], default="baseline",
                       help="Pretrained model name")
     parser.add_argument("--run_private", action="store_true")
     args = parser.parse_args()
