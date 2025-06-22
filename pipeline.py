@@ -142,14 +142,14 @@ if __name__ == "__main__":
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = get_model(args.model).to(device)
-
     num_epochs = 10
     batch_size = 8
     learning_rate = 1e-4
 
     dataset = MovieDataset(max_length=512, train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    model = get_model(args.model, num_labels=dataset.num_labels).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate)
     criterion = CrossEntropyLoss()
