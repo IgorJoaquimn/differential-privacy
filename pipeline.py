@@ -28,8 +28,8 @@ def set_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # torch.backends.cudnn.deterministic = True  # Makes training slower but ensures reproducibility
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True  # Makes training slower but ensures reproducibility
+    torch.backends.cudnn.benchmark = False
 
 
 def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs):
@@ -145,6 +145,7 @@ if __name__ == "__main__":
         default="baseline",
         help="Pretrained model name",
     )
+    parser.add_argument("--train", action="store_true", help="Run training")
     parser.add_argument("--run_private", action="store_true")
     args = parser.parse_args()
 
@@ -163,13 +164,14 @@ if __name__ == "__main__":
     criterion = CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
-    if args.run_private:
-        train_with_privacy(
-            model, dataloader, optimizer, criterion, scheduler, device, num_epochs
-        )
+    if args.train:
+        if args.run_private:
+            train_with_privacy(
+                model, dataloader, optimizer, criterion, scheduler, device, num_epochs
+            )
+        else:
+            train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
     else:
-        train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
-
-    dataset = MovieDataset(max_length=512, train=False)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-    evaluate(model, dataloader, device)
+        dataset = MovieDataset(max_length=512, train=False)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        evaluate(model, dataloader, device)
