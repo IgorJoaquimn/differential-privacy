@@ -28,10 +28,8 @@ def set_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = (
-        True  # Makes training slower but ensures reproducibility
-    )
-    torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True  # Makes training slower but ensures reproducibility
+    # torch.backends.cudnn.benchmark = False
 
 
 def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs):
@@ -42,7 +40,7 @@ def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs
         if epoch % 5 == 0 or epoch == num_epochs - 1:
             save_model(model, f"checkpoints/model_epoch_{epoch + 1}.pt")
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
-    return losses # TODO: save losses somewhere
+    return losses  # TODO: save losses somewhere
 
 
 def train_with_privacy(
@@ -60,7 +58,7 @@ def train_with_privacy(
         module=model,
         optimizer=optimizer,
         data_loader=dataloader,
-        noise_multiplier=1.0, # TODO: adjust 
+        noise_multiplier=1.0,  # TODO: adjust
         max_grad_norm=1.0,
     )
 
@@ -71,7 +69,9 @@ def train_with_privacy(
         if epoch % 5 == 0 or epoch == num_epochs - 1:
             save_model(model, f"checkpoints/private_model_epoch_{epoch + 1}.pt")
         curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}")
+        print(
+            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
+        )
     return losses
 
 
@@ -125,10 +125,12 @@ def get_model(name, **kwargs):
         "tem": TEMModel,
         "madlib": MadlibModel,
     }
-    
+
     if name not in models:
-        raise ValueError(f"Model {name} not supported. Options are: {list(models.keys())}")
-    
+        raise ValueError(
+            f"Model {name} not supported. Options are: {list(models.keys())}"
+        )
+
     return models[name](**kwargs)
 
 
@@ -136,11 +138,16 @@ if __name__ == "__main__":
     set_seed(42)
 
     parser = argparse.ArgumentParser(description="Train a movie review classifier")
-    parser.add_argument("--model", type=str, choices=["baseline", "tem", "madlib"], default="baseline",
-                      help="Pretrained model name")
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["baseline", "tem", "madlib"],
+        default="baseline",
+        help="Pretrained model name",
+    )
     parser.add_argument("--run_private", action="store_true")
     args = parser.parse_args()
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     num_epochs = 10
@@ -157,7 +164,9 @@ if __name__ == "__main__":
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
     if args.run_private:
-        train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+        train_with_privacy(
+            model, dataloader, optimizer, criterion, scheduler, device, num_epochs
+        )
     else:
         train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
 
