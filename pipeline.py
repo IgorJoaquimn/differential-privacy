@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.metrics import f1_score, accuracy_score
-from transformers import DistilBertForSequenceClassification
+from transformers import AutoModelForSequenceClassification
 from dataset import MovieDataset
 from opacus import PrivacyEngine
 
@@ -127,9 +127,7 @@ if __name__ == "__main__":
     dataset = MovieDataset(max_length=512, train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    model = DistilBertForSequenceClassification.from_pretrained(
-        "distilbert-base-uncased", num_labels=dataset.num_labels
-    ).to(device)
+    model = AutoModelForSequenceClassification.from_pretrained('sentence-transformers/all-MiniLM-L6-v2', num_labels=dataset.num_labels).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate)
     criterion = CrossEntropyLoss()

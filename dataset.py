@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 
 
 class MovieDataset(Dataset):
-    def __init__(self, train=True, max_length=512):
+    def __init__(self, train=True, max_length=256):
         self.padding_token = 0
         self.max_length = max_length
         self.tokens, self.labels, self.num_labels = self._prepare_data(train)

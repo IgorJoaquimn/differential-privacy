@@ -9,7 +9,7 @@ def main():
     parser.add_argument("--output", required=True, help="Output CSV file")
     args = parser.parse_args()
 
-    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
 
     df = pd.read_csv(args.input, low_memory=False)
 
