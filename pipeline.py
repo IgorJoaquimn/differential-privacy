@@ -112,11 +112,14 @@ def evaluate(model, dataloader, device):
     return acc, f1
 
 
-def save_model(model, path="model.pt"):
+def save_model(model):
     if not os.path.exists("checkpoints"):
         os.makedirs("checkpoints")
-    torch.save(model.state_dict(), path)
-    print(f"Model saved to {path}")
+    fname = f"checkpoints/{args.model}.pt"
+    if args.run_private:
+        fname = f"checkpoints/private_{args.model}.pt"
+    torch.save(model.state_dict(), fname)
+    print(f"Model saved to {fname}")
 
 
 def get_model(name, **kwargs):
@@ -168,11 +171,29 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(args.test, map_location=device))
     else:
         if args.run_private:
-            train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
         else:
-            train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+
+            if not os.path.exists("results"):
+                os.makedirs("results")
+            fname = f"results/{args.model}_losses.txt"
+            if args.run_private:
+                fname = f"results/{args.model}_private_losses.txt"
+            with open(fname, "w") as f:
+                for loss in losses:
+                    f.write(f"{loss:.4f}\n")
 
     dataset = MovieDataset(max_length=512, train=False)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
-    evaluate(model, dataloader, device)
+    acc, f1 = evaluate(model, dataloader, device)
+
+    if not os.path.exists("results"):
+        os.makedirs("results")
+    
+    fname = f"results/{args.model}_results.txt"
+    if args.run_private:
+        fname = f"results/{args.model}_private_results.txt"
+    with open(fname, "w") as f:
+        f.write(f"Accuracy: {acc:.4f}, F1 Score (weighted): {f1:.4f}\n")
