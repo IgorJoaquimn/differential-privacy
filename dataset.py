@@ -47,7 +47,7 @@ class MovieDataset(Dataset):
         tokens = df["overview_tokens"].tolist()
         labels = df["label"].tolist()
         x_train, x_test, y_train, y_test = train_test_split(
-            tokens, labels, test_size=0.25, random_state=42
+            tokens, labels, test_size=0.6, random_state=42
         )
 
         if train:
