@@ -98,7 +98,7 @@ def evaluate(model, dataloader, device):
     y_true = []
     y_pred = []
     with torch.no_grad():
-        for x, y, att_mask in dataloader:
+        for x, y, att_mask in tqdm(dataloader):
             x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
             logits = model(x, attention_mask=att_mask).logits
             predictions = logits.argmax(dim=1)
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     batch_size = 8
     learning_rate = 1e-4
 
-    dataset = MovieDataset(max_length=512, train=True)
+    dataset = MovieDataset(max_length=256, train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
