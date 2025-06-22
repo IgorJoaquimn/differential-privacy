@@ -7,7 +7,6 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.metrics import f1_score, accuracy_score
-from transformers import AutoModelForSequenceClassification
 from dataset import MovieDataset
 from opacus import PrivacyEngine
 
