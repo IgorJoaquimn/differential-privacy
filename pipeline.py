@@ -62,7 +62,6 @@ def train_with_privacy(
         data_loader=dataloader,
         noise_multiplier=1.0, # TODO: adjust 
         max_grad_norm=1.0,
-        batch_first=True
     )
 
     losses = []
@@ -134,10 +133,12 @@ def get_model(name, **kwargs):
 
 
 if __name__ == "__main__":
-    # Add model as argument
+    set_seed(42)
+
     parser = argparse.ArgumentParser(description="Train a movie review classifier")
     parser.add_argument("--model", type=str, default="baseline",
-                        help="Pretrained model name")
+                      help="Pretrained model name")
+    parser.add_argument("--run_private", action="store_true")
     args = parser.parse_args()
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -155,7 +156,10 @@ if __name__ == "__main__":
     criterion = CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
-    train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+    if args.run_private:
+        train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+    else:
+        train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
 
     dataset = MovieDataset(max_length=512, train=False)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
