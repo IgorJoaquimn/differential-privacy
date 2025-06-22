@@ -145,7 +145,7 @@ if __name__ == "__main__":
         default="baseline",
         help="Pretrained model name",
     )
-    parser.add_argument("--test", type=str, default=None, help="Test with give checkpoint.")
+    parser.add_argument("--eval", type=str, default=None, help="Test with give checkpoint.")
     parser.add_argument("--run_private", action="store_true")
     args = parser.parse_args()
 
@@ -164,15 +164,15 @@ if __name__ == "__main__":
     criterion = CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
-    if not args.test:
+    if args.eval:
+        model.load_state_dict(torch.load(args.test, map_location=device))
+    else:
         if args.run_private:
-            train_with_privacy(
-                model, dataloader, optimizer, criterion, scheduler, device, num_epochs
-            )
+            train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
         else:
             train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
-    else:
-        dataset = MovieDataset(max_length=512, train=False)
-        model.load_state_dict(torch.load(args.test, map_location=device))
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-        evaluate(model, dataloader, device)
+
+    dataset = MovieDataset(max_length=512, train=False)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+    evaluate(model, dataloader, device)
