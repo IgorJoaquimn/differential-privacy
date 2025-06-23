@@ -32,17 +32,28 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args):
+def create_results_dir(num_epochs, max_length, batch_size, learning_rate):
+    """Create organized results directory structure"""
+    results_dir = f"results/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
+    checkpoints_dir = f"checkpoints/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
+    
+    os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(checkpoints_dir, exist_ok=True)
+    
+    return results_dir, checkpoints_dir
+
+
+def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir):
     losses = []
     for epoch in range(num_epochs):
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
         if epoch % 5 == 0 or epoch == num_epochs - 1:
-            save_model(model, args, epoch + 1)  # Pass args and epoch number
+            save_model(model, args, checkpoints_dir, epoch + 1)  # Pass checkpoints_dir
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
     
     # Save losses to a JSON file
-    save_losses(losses, args)
+    save_losses(losses, args, checkpoints_dir)
     return losses
 
 
@@ -55,6 +66,7 @@ def train_with_privacy(
     device,
     num_epochs,
     args,
+    checkpoints_dir,
     delta=1e-5,
 ):
     privacy_engine = PrivacyEngine()
@@ -71,11 +83,12 @@ def train_with_privacy(
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
         if epoch % 5 == 0 or epoch == num_epochs - 1:
-            save_model(model, args, epoch + 1)
+            save_model(model, args, checkpoints_dir, epoch + 1)
         curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
         print(
             f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
         )
+    
     return losses
 
 
@@ -116,34 +129,19 @@ def evaluate(model, dataloader, device):
     return acc, f1
 
 
-def save_model(model, args, epoch=None):
-    if not os.path.exists("checkpoints"):
-        os.makedirs("checkpoints")
-    
+def save_model(model, args, checkpoints_dir, epoch=None):
     # Create filename based on whether it's a checkpoint or final model
     if epoch is not None:
         # For epoch checkpoints
         base_name = f"private_{args.model}" if args.run_private else args.model
-        fname = f"checkpoints/{base_name}_epoch_{epoch}.pt"
+        fname = f"{checkpoints_dir}/{base_name}_epoch_{epoch}.pt"
     else:
         # For final model
-        fname = f"checkpoints/private_{args.model}.pt" if args.run_private else f"checkpoints/{args.model}.pt"
+        base_name = f"private_{args.model}" if args.run_private else args.model
+        fname = f"{checkpoints_dir}/{base_name}.pt"
     
     torch.save(model.state_dict(), fname)
     print(f"Model saved to {fname}")
-
-def save_losses(losses, args):
-    """Save training losses to a JSON file"""
-    if not os.path.exists("checkpoints"):
-        os.makedirs("checkpoints")
-    
-    base_name = f"private_{args.model}" if args.run_private else args.model
-    losses_file = f"checkpoints/{base_name}_losses.json"
-    
-    with open(losses_file, 'w') as f:
-        json.dump(losses, f)
-    print(f"Losses saved to {losses_file}")
-
 
 def get_model(name, **kwargs):
     models = {
@@ -180,8 +178,12 @@ if __name__ == "__main__":
     num_epochs = 10
     batch_size = 8
     learning_rate = 1e-4
+    max_length = 256
 
-    dataset = MovieDataset(max_length=256, train=True)
+    # Create organized directory structure
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate)
+
+    dataset = MovieDataset(max_length=max_length, train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
@@ -191,32 +193,29 @@ if __name__ == "__main__":
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
     if args.eval:
-        model.load_state_dict(torch.load(args.test, map_location=device))
+        model.load_state_dict(torch.load(args.eval, map_location=device))  # Fixed: was args.test
     else:
         if args.run_private:
-            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args)
+            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
         else:
-            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args)
+            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
 
-            if not os.path.exists("results"):
-                os.makedirs("results")
-            fname = f"results/{args.model}_losses.txt"
-            if args.run_private:
-                fname = f"results/{args.model}_private_losses.txt"
-            with open(fname, "w") as f:
-                for loss in losses:
-                    f.write(f"{loss:.4f}\n")
+        # Save losses to text file in results directory
+        fname = f"{results_dir}/{args.model}_losses.txt"
+        if args.run_private:
+            fname = f"{results_dir}/{args.model}_private_losses.txt"
+        with open(fname, "w") as f:
+            for loss in losses:
+                f.write(f"{loss:.4f}\n")
 
-    dataset = MovieDataset(max_length=512, train=False)
+    dataset = MovieDataset(max_length=max_length, train=False)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     acc, f1 = evaluate(model, dataloader, device)
 
-    if not os.path.exists("results"):
-        os.makedirs("results")
-    
-    fname = f"results/{args.model}_results.txt"
+    # Save results in organized directory
+    fname = f"{results_dir}/{args.model}_results.txt"
     if args.run_private:
-        fname = f"results/{args.model}_private_results.txt"
+        fname = f"{results_dir}/{args.model}_private_results.txt"
     with open(fname, "w") as f:
         f.write(f"Accuracy: {acc:.4f}, F1 Score (weighted): {f1:.4f}\n")
