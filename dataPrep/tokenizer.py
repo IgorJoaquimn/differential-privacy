@@ -9,12 +9,12 @@ def main():
     parser.add_argument("--output", required=True, help="Output CSV file")
     args = parser.parse_args()
 
-    tokenizer = AutoTokenizer.from_pretrained("distilbert/distilbert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
 
     df = pd.read_csv(args.input, low_memory=False)
 
     if args.text_column not in df.columns:
-        raise ValueError(f"Column '{args.text_column}' not found in input file.")
+        raise ValueError(f"Column {args.text_column} not found in input file.")
 
     def tokenize_text(text):
         return tokenizer.encode(
