@@ -1,6 +1,7 @@
 import argparse
 import os
 import torch
+import json
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -31,15 +32,18 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs):
+def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args):
     losses = []
     for epoch in range(num_epochs):
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
         if epoch % 5 == 0 or epoch == num_epochs - 1:
-            save_model(model, f"checkpoints/model_epoch_{epoch + 1}.pt")
+            save_model(model, args, epoch + 1)  # Pass args and epoch number
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
-    return losses  # TODO: save losses somewhere
+    
+    # Save losses to a JSON file
+    save_losses(losses, args)
+    return losses
 
 
 def train_with_privacy(
@@ -50,6 +54,7 @@ def train_with_privacy(
     scheduler,
     device,
     num_epochs,
+    args,
     delta=1e-5,
 ):
     privacy_engine = PrivacyEngine()
@@ -66,7 +71,7 @@ def train_with_privacy(
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
         if epoch % 5 == 0 or epoch == num_epochs - 1:
-            save_model(model, f"checkpoints/private_model_epoch_{epoch + 1}.pt")
+            save_model(model, args, epoch + 1)
         curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
         print(
             f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
@@ -111,14 +116,33 @@ def evaluate(model, dataloader, device):
     return acc, f1
 
 
-def save_model(model):
+def save_model(model, args, epoch=None):
     if not os.path.exists("checkpoints"):
         os.makedirs("checkpoints")
-    fname = f"checkpoints/{args.model}.pt"
-    if args.run_private:
-        fname = f"checkpoints/private_{args.model}.pt"
+    
+    # Create filename based on whether it's a checkpoint or final model
+    if epoch is not None:
+        # For epoch checkpoints
+        base_name = f"private_{args.model}" if args.run_private else args.model
+        fname = f"checkpoints/{base_name}_epoch_{epoch}.pt"
+    else:
+        # For final model
+        fname = f"checkpoints/private_{args.model}.pt" if args.run_private else f"checkpoints/{args.model}.pt"
+    
     torch.save(model.state_dict(), fname)
     print(f"Model saved to {fname}")
+
+def save_losses(losses, args):
+    """Save training losses to a JSON file"""
+    if not os.path.exists("checkpoints"):
+        os.makedirs("checkpoints")
+    
+    base_name = f"private_{args.model}" if args.run_private else args.model
+    losses_file = f"checkpoints/{base_name}_losses.json"
+    
+    with open(losses_file, 'w') as f:
+        json.dump(losses, f)
+    print(f"Losses saved to {losses_file}")
 
 
 def get_model(name, **kwargs):
@@ -170,9 +194,9 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(args.test, map_location=device))
     else:
         if args.run_private:
-            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args)
         else:
-            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs)
+            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args)
 
             if not os.path.exists("results"):
                 os.makedirs("results")
