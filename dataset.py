@@ -6,7 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 
 
 class MovieDataset(Dataset):
-    def __init__(self, train=True, max_length=256):
+    def __init__(self, train=True, max_length=128):
         self.padding_token = 0
         self.max_length = max_length
         self.tokens, self.labels, self.num_labels = self._prepare_data(train)
@@ -27,24 +27,18 @@ class MovieDataset(Dataset):
         path = "dataPrep/data/movies_tokenized.csv"
         df = pd.read_csv(path)
 
-        # Extracts only the first genre or 'Unknown' if no genres are present
-        df["genre"] = (
-            df["genres"]
-            .fillna("[]")
-            .apply(lambda x: eval(x)[0]["name"] if eval(x) else "Unknown")
-        )
 
-        df["overview_tokens"] = df["overview_tokens"].apply(
+        df["review_tokens"] = df["review_tokens"].apply(
             lambda x: eval(x) if isinstance(x, str) else []
         )
-        df = df[df["overview_tokens"].apply(len) > 0]
+        df = df[df["review_tokens"].apply(len) > 0]
 
-        # Codify genres into integers
+        # Codify sentiments into integers
         le = LabelEncoder()
-        df["label"] = le.fit_transform(df["genre"])
+        df["label"] = le.fit_transform(df["sentiment"])
         num_labels = df["label"].nunique()
 
-        tokens = df["overview_tokens"].tolist()
+        tokens = df["review_tokens"].tolist()
         labels = df["label"].tolist()
         x_train, x_test, y_train, y_test = train_test_split(
             tokens, labels, test_size=0.6, random_state=42
