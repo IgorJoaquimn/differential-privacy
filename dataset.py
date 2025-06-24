@@ -9,29 +9,25 @@ class MovieDataset(Dataset):
     def __init__(self, train=True, max_length=128):
         self.padding_token = 0
         self.max_length = max_length
-        self.tokens, self.labels, self.num_labels = self._prepare_data(train)
+        self.tokens, self.labels, self.attention_masks, self.num_labels = self._prepare_data(train)
 
     def __len__(self):
         return len(self.tokens)
 
     def __getitem__(self, idx):
-        x = self.tokens[idx][: self.max_length]
+        x = self.tokens[idx]
         y = self.labels[idx]
-        att_mask = [1] * len(x)  # Attention mask for the tokens
-        if len(x) < self.max_length:
-            x = x + [self.padding_token] * (self.max_length - len(x))
-            att_mask += [0] * (self.max_length - len(att_mask))
+        att_mask = self.attention_masks[idx]
         return torch.tensor(x), torch.tensor(y), torch.tensor(att_mask)
 
     def _prepare_data(self, train):
         path = "dataPrep/data/movies_tokenized.csv"
         self.df = pd.read_csv(path)
-
-
-        self.df["review_tokens"] = self.df["review_tokens"].apply(
-            lambda x: eval(x) if isinstance(x, str) else []
-        )
         self.df = self.df[self.df["review_tokens"].apply(len) > 0]
+
+        # Convert string representations of lists to actual lists
+        self.df["review_tokens"] = self.df["review_tokens"].apply(ast.literal_eval)
+        self.df["attention_mask"] = self.df["attention_mask"].apply(ast.literal_eval)
 
         # Codify sentiments into integers
         le = LabelEncoder()
@@ -40,10 +36,12 @@ class MovieDataset(Dataset):
 
         tokens = self.df["review_tokens"].tolist()
         labels = self.df["label"].tolist()
-        x_train, x_test, y_train, y_test = train_test_split(
-            tokens, labels, train_size=0.6, random_state=42
+        attention_masks = self.df["attention_mask"].tolist()
+
+        x_train, x_test, y_train, y_test, att_train, att_test = train_test_split(
+            tokens, labels, attention_masks, train_size=0.6, random_state=42
         )
 
         if train:
-            return x_train, y_train, num_labels
-        return x_test, y_test, num_labels
+            return x_train, y_train, att_train, num_labels
+        return x_test, y_test, att_test, num_labels
