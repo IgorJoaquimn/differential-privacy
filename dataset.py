@@ -25,21 +25,21 @@ class MovieDataset(Dataset):
 
     def _prepare_data(self, train):
         path = "dataPrep/data/movies_tokenized.csv"
-        df = pd.read_csv(path)
+        self.df = pd.read_csv(path)
 
 
-        df["review_tokens"] = df["review_tokens"].apply(
+        self.df["review_tokens"] = self.df["review_tokens"].apply(
             lambda x: eval(x) if isinstance(x, str) else []
         )
-        df = df[df["review_tokens"].apply(len) > 0]
+        self.df = self.df[self.df["review_tokens"].apply(len) > 0]
 
         # Codify sentiments into integers
         le = LabelEncoder()
-        df["label"] = le.fit_transform(df["sentiment"])
-        num_labels = df["label"].nunique()
+        self.df["label"] = le.fit_transform(self.df["sentiment"])
+        num_labels = self.df["label"].nunique()
 
-        tokens = df["review_tokens"].tolist()
-        labels = df["label"].tolist()
+        tokens = self.df["review_tokens"].tolist()
+        labels = self.df["label"].tolist()
         x_train, x_test, y_train, y_test = train_test_split(
             tokens, labels, train_size=0.6, random_state=42
         )

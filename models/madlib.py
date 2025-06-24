@@ -1,6 +1,6 @@
-from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
 import torch
 import torch.nn as nn
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
 def add_non_negative_exponential_noise(vector, epsilon=0.1):
@@ -78,16 +78,37 @@ class NoisyEmbedding(nn.Module):
         return add_non_negative_exponential_noise(self.embedding(input_ids), self.epsilon)
 
 class MadlibModel(nn.Module):
-    def __init__(self, num_labels, model_name="distilbert/distilbert-base-uncased", epsilon=0.1):
+    def __init__(self, num_labels=2, model_name="sentence-transformers/all-MiniLM-L6-v2", epsilon=5):
         super(MadlibModel, self).__init__()
-        self.tokenizer = DistilBertTokenizer.from_pretrained(model_name)
-        self.model = DistilBertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        # Usamos AutoModelForSequenceClassification diretamente
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_name,
+            num_labels=num_labels
+        )
+        # Epsilon for noise generation
         self.epsilon = epsilon
 
         # Replace the word embeddings with noisy embeddings
-        self.original_emb = self.model.distilbert.embeddings.word_embeddings
-        self.model.distilbert.embeddings.word_embeddings = NoisyEmbedding(self.original_emb, epsilon)
-
-    def forward(self, input_ids, attention_mask=None, **kwargs):
-        # Pass along any extra kwargs (like output_hidden_states)
-        return self.model(input_ids=input_ids, attention_mask=attention_mask, **kwargs)
+        self.original_emb = self.model.get_input_embeddings()
+        self.model.set_input_embeddings(NoisyEmbedding(self.original_emb, epsilon))
+        
+        # Certifique-se que todos os parâmetros estão com grad ativo para fine-tuning
+        for param in self.model.parameters():
+            param.requires_grad = True
+        
+    def forward(self, input_ids, attention_mask=None):
+        # O output já inclui logits diretamente
+        output = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = output.logits
+        return logits
+    
+    def get_embeddings(self, input_ids):
+        """
+        Recebe input_ids e retorna o embedding tensor correspondente (com ruído aplicado).
+        """
+        # Passa os ids pelo embedding (que já está modificado com ruído)
+        embeddings = self.model.get_input_embeddings()(input_ids)
+        return embeddings
+    

@@ -1,4 +1,4 @@
-from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -54,15 +54,20 @@ class NoisyEmbedding(nn.Module):
         return get_metric_truncated_exponential_mechanism(self.embedding(input_ids), self.embedding.weight, self.epsilon)
 
 class TEMModel(nn.Module):
-    def __init__(self, num_labels, model_name="distilbert/distilbert-base-uncased", epsilon=0.1):
+    def __init__(self, num_labels=2, model_name="sentence-transformers/all-MiniLM-L6-v2", epsilon=5):
         super(TEMModel, self).__init__()
-        self.tokenizer = DistilBertTokenizer.from_pretrained(model_name)
-        self.model = DistilBertForSequenceClassification.from_pretrained(model_name, num_labels=num_labels)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        # Usamos AutoModelForSequenceClassification diretamente
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_name,
+            num_labels=num_labels
+        )
         self.epsilon = epsilon
 
         # Replace the word embeddings with noisy embeddings
-        self.original_emb = self.model.distilbert.embeddings.word_embeddings
-        self.model.distilbert.embeddings.word_embeddings = NoisyEmbedding(self.original_emb, epsilon)
+        self.original_emb = self.model.get_input_embeddings()
+        self.model.set_input_embeddings(NoisyEmbedding(self.original_emb, epsilon))
 
     def forward(self, input_ids, attention_mask=None):
         return self.model(input_ids=input_ids, attention_mask=attention_mask)
