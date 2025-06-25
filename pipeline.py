@@ -81,7 +81,8 @@ def train_with_privacy(
         losses.append(loss)
         if epoch % 5 == 0 or epoch == num_epochs - 1:
             save_model(model, args, checkpoints_dir, epoch + 1)
-        curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
+            curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
+            print(f"Privacy spent: epsilon={curr_epsilon:.4f}, alpha={best_alpha:.4f}")
         print(
             f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
         )
@@ -95,7 +96,7 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
 
     for x, y, att_mask in tqdm(dataloader, desc="epoch"):
         x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
-        logits = model(x, attention_mask=att_mask).logits
+        logits = model(x, attention_mask=att_mask)
         loss = criterion(logits, y)
         total_loss += loss.item()
 
@@ -114,7 +115,7 @@ def evaluate(model, dataloader, device):
     with torch.no_grad():
         for x, y, att_mask in tqdm(dataloader):
             x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
-            logits = model(x, attention_mask=att_mask).logits
+            logits = model(x, attention_mask=att_mask)
             predictions = logits.argmax(dim=1)
             y_true.extend(y.cpu().tolist())
             y_pred.extend(predictions.cpu().tolist())
@@ -139,6 +140,7 @@ def save_model(model, args, checkpoints_dir, epoch=None):
     
     torch.save(model.state_dict(), fname)
     print(f"Model saved to {fname}")
+
 
 def get_model(name, **kwargs):
     models = {
@@ -168,29 +170,34 @@ if __name__ == "__main__":
     )
     parser.add_argument("--eval", type=str, default=None, help="Test with give checkpoint.")
     parser.add_argument("--run_private", action="store_true")
+    parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--max_length", type=int, default=256, help="Maximum sequence length")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    num_epochs = 10
-    batch_size = 8
-    learning_rate = 1e-4
-    max_length = 256
+    num_epochs = args.num_epochs
+    batch_size = args.batch_size
+    learning_rate = args.learning_rate
+    max_length = args.max_length
 
     # Create organized directory structure
     results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate)
 
-    dataset = MovieDataset(max_length=max_length, train=True)
+    dataset = MovieDataset(train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate)
     criterion = CrossEntropyLoss()
-    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs*len(dataloader), eta_min=1e-6)
 
     if args.eval:
-        model.load_state_dict(torch.load(args.eval, map_location=device))  # Fixed: was args.test
+        model.load_state_dict(torch.load(args.eval, map_location=device))
     else:
         if args.run_private:
             losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
@@ -205,7 +212,7 @@ if __name__ == "__main__":
             for loss in losses:
                 f.write(f"{loss:.4f}\n")
 
-    dataset = MovieDataset(max_length=max_length, train=False)
+    dataset = MovieDataset(train=False)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     acc, f1 = evaluate(model, dataloader, device)
