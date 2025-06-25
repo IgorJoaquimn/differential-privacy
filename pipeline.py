@@ -192,6 +192,8 @@ if __name__ == "__main__":
     parser.add_argument("--target_epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
     args = parser.parse_args()
 
+    print(f"Executing with arguments: {args}")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
