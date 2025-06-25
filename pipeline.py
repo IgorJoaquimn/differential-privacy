@@ -37,9 +37,9 @@ def create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilo
     results_dir = f"results/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
     checkpoints_dir = f"checkpoints/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
     if epsilon is not None and delta is not None:
-        results_dir += f"/epsilon_{epsilon}_delta_{delta}"
-        checkpoints_dir += f"/epsilon_{epsilon}_delta_{delta}"
-    
+        results_dir += f"/epsilon_{epsilon}_delta_{delta:.3f}"
+        checkpoints_dir += f"/epsilon_{epsilon}_delta_{delta:.3f}"
+
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
     
