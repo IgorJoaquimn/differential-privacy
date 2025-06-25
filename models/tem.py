@@ -61,7 +61,7 @@ class NoisyEmbedding(nn.Module):
         return get_metric_truncated_exponential_mechanism(
             self.embedding(input_ids),
             self.embedding.weight,
-            self.normalized_embedding.weight,
+            self.normalized_embedding,
             self.epsilon,
         )
 
