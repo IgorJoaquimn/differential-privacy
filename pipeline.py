@@ -188,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument("--run_private", action="store_true")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
-    parser.add_argument("--learning_rate", type=float, default=5e-4, help="Learning rate for the optimizer")
+    parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
     parser.add_argument("--target_epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
     args = parser.parse_args()
 
