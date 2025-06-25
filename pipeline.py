@@ -1,7 +1,6 @@
 import argparse
 import os
 import torch
-import json
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -52,8 +51,6 @@ def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs
             save_model(model, args, checkpoints_dir, epoch + 1)  # Pass checkpoints_dir
         print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
     
-    # Save losses to a JSON file
-    save_losses(losses, args, checkpoints_dir)
     return losses
 
 

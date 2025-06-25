@@ -17,7 +17,7 @@ def main():
         raise ValueError(f"Column {args.text_column} not found in input file.")
 
     def tokenize_text(text):
-        encoded_input =  tokenizer.encode(
+        encoded_input =  tokenizer(
             text,
             add_special_tokens=True,
             truncation=True,
@@ -26,7 +26,7 @@ def main():
         )
         return encoded_input['input_ids'], encoded_input['attention_mask'] # Return tokens and attention mask
 
-    tokenized_data = df['review'].astype(str).apply(tokenize_text)
+    tokenized_data = df[args.text_column].astype(str).apply(tokenize_text)
 
     df[f'{args.text_column}_tokens'] = [x[0] for x in tokenized_data]
     df['attention_mask'] = [x[1] for x in tokenized_data]
