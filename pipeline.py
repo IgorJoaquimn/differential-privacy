@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # Create organized directory structure
     results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon if args.run_private else None)
 
-    model = get_model(args.model, num_labels=dataset.num_labels).to(device)
+    model = get_model(args.model, num_labels=dataset.num_labels, epsilon=epsilon).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate, eps=1e-8)
     criterion = CrossEntropyLoss()
