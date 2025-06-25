@@ -190,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=256, help="Maximum sequence length")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=5e-4, help="Learning rate for the optimizer")
-    parser.add_argument("--target-epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
+    parser.add_argument("--target_epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
