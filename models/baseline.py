@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 class BaselineModel(nn.Module):
-    def __init__(self, num_labels, model_name="sentence-transformers/all-MiniLM-L6-v2"):
+    def __init__(self, num_labels, model_name="sentence-transformers/all-MiniLM-L6-v2", **kwargs):
         super(BaselineModel, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         
