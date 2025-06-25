@@ -31,10 +31,13 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def create_results_dir(num_epochs, max_length, batch_size, learning_rate):
+def create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon=None, delta=None):
     """Create organized results directory structure"""
     results_dir = f"results/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
     checkpoints_dir = f"checkpoints/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
+    if epsilon is not None and delta is not None:
+        results_dir += f"/epsilon_{epsilon}_delta_{delta}"
+        checkpoints_dir += f"/epsilon_{epsilon}_delta_{delta}"
     
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
@@ -64,15 +67,17 @@ def train_with_privacy(
     num_epochs,
     args,
     checkpoints_dir,
+    epsilon=5.0,
     delta=1e-5,
 ):
     privacy_engine = PrivacyEngine()
-    model, optimizer, dataloader = privacy_engine.make_private(
+    model, optimizer, dataloader = privacy_engine.make_private_with_epsilon(
         module=model,
         optimizer=optimizer,
         data_loader=dataloader,
-        noise_multiplier=0.8,
-        max_grad_norm=1.0,
+        target_delta=delta,
+        target_epsilon=epsilon,
+        epochs=num_epochs,
     )
 
     losses = []
@@ -84,11 +89,6 @@ def train_with_privacy(
         if epoch % 5 == 0 or epoch == num_epochs - 1 or curr_epsilon > 5.0:
             save_model(model, args, checkpoints_dir, epoch + 1)
             print(f"Privacy spent: epsilon={curr_epsilon:.4f}, alpha={best_alpha:.4f}")
-
-            if curr_epsilon > 5.0: # Early stopping condition
-                print("Epsilon exceeded 5.0, stopping training.")
-                break
-
         print(
             f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
         )
@@ -180,6 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=256, help="Maximum sequence length")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
+    parser.add_argument("--target-epsilon", type=float, default=5.0, help="Target epsilon for differential privacy")
+    parser.add_argument("--target-delta", type=float, default=1e-5, help="Target delta for differential privacy")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -189,9 +191,11 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     learning_rate = args.learning_rate
     max_length = args.max_length
+    epsilon = args.target_epsilon
+    delta = args.target_delta
 
     # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate)
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon, delta)
 
     dataset = MovieDataset(train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -206,7 +210,19 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(args.eval, map_location=device))
     else:
         if args.run_private:
-            losses = train_with_privacy(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
+            losses = train_with_privacy(
+                model,
+                dataloader,
+                optimizer,
+                criterion,
+                scheduler,
+                device,
+                num_epochs,
+                args,
+                checkpoints_dir,
+                epsilon,
+                delta,
+            )
         else:
             losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
 
