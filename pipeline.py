@@ -210,7 +210,6 @@ if __name__ == "__main__":
     # Create organized directory structure
     results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon)
 
-    print(dataset.num_labels)
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
 
     optimizer = Adam(model.parameters(), lr=learning_rate, eps=1e-8)
