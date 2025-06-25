@@ -32,10 +32,10 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon=None):
+def create_results_dir(num_epochs, batch_size, learning_rate, epsilon=None):
     """Create organized results directory structure"""
-    results_dir = f"results/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
-    checkpoints_dir = f"checkpoints/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
+    results_dir = f"results/{num_epochs}/{batch_size}/{learning_rate}"
+    checkpoints_dir = f"checkpoints/{num_epochs}/{batch_size}/{learning_rate}"
     if epsilon is not None:
         results_dir += f"/epsilon_{epsilon}"
         checkpoints_dir += f"/epsilon_{epsilon}"
@@ -187,7 +187,6 @@ if __name__ == "__main__":
     parser.add_argument("--eval", type=str, default=None, help="Test with give checkpoint.")
     parser.add_argument("--run_private", action="store_true")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
-    parser.add_argument("--max_length", type=int, default=256, help="Maximum sequence length")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=5e-4, help="Learning rate for the optimizer")
     parser.add_argument("--target_epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
@@ -199,7 +198,6 @@ if __name__ == "__main__":
     num_epochs = args.num_epochs
     batch_size = args.batch_size
     learning_rate = args.learning_rate
-    max_length = args.max_length
     epsilon = args.target_epsilon
 
     dataset = MovieDataset(train=True)
@@ -208,7 +206,7 @@ if __name__ == "__main__":
     delta = 1 / len(dataloader)  # Set delta based on the number of batches
 
     # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon)
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon)
 
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
 
