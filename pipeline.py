@@ -9,6 +9,7 @@ from tqdm import tqdm
 from sklearn.metrics import f1_score, accuracy_score
 from dataset import MovieDataset
 from opacus import PrivacyEngine
+from opacus.utils.batch_memory_manager import BatchMemoryManager
 
 from models.baseline import BaselineModel
 from models.madlib import MadlibModel
@@ -69,6 +70,8 @@ def train_with_privacy(
     checkpoints_dir,
     epsilon,
     delta,
+    max_grad_norm=0.1,
+    max_physical_batch_size=8,
 ):
     privacy_engine = PrivacyEngine()
     model, optimizer, dataloader = privacy_engine.make_private_with_epsilon(
@@ -78,12 +81,17 @@ def train_with_privacy(
         target_delta=delta,
         target_epsilon=epsilon,
         epochs=num_epochs,
-        max_grad_norm=1.0
+        max_grad_norm=max_grad_norm
     )
 
     losses = []
     for epoch in range(num_epochs):
-        loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
+        with BatchMemoryManager(
+            data_loader=dataloader,
+            max_physical_batch_size=max_physical_batch_size,
+            optimizer=optimizer,
+        ) as memory_safe_dataloader:
+            loss = train_epoch(model, memory_safe_dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
 
         curr_epsilon = privacy_engine.accountant.get_epsilon(delta)
@@ -105,7 +113,7 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
     for x, y, att_mask in tqdm(dataloader, desc="epoch"):
         x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
         logits = model(x, attention_mask=att_mask)
-        loss = criterion(logits, y)
+        loss = criterion(logits, y.long())
         total_loss += loss.item()
 
         optimizer.zero_grad()
@@ -180,10 +188,9 @@ if __name__ == "__main__":
     parser.add_argument("--run_private", action="store_true")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--max_length", type=int, default=256, help="Maximum sequence length")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for training")
-    parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
-    parser.add_argument("--target-epsilon", type=float, default=5.0, help="Target epsilon for differential privacy")
-    parser.add_argument("--target-delta", type=float, default=1e-5, help="Target delta for differential privacy")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
+    parser.add_argument("--learning_rate", type=float, default=5e-4, help="Learning rate for the optimizer")
+    parser.add_argument("--target-epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -194,17 +201,19 @@ if __name__ == "__main__":
     learning_rate = args.learning_rate
     max_length = args.max_length
     epsilon = args.target_epsilon
-    delta = args.target_delta
-
-    # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon, delta)
 
     dataset = MovieDataset(train=True)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
+    delta = 1 / len(dataloader)  # Set delta based on the number of batches
+
+    # Create organized directory structure
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon, delta)
+
+    print(dataset.num_labels)
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
 
-    optimizer = Adam(model.parameters(), lr=learning_rate)
+    optimizer = Adam(model.parameters(), lr=learning_rate, eps=1e-8)
     criterion = CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs*len(dataloader), eta_min=1e-6)
 
@@ -223,7 +232,7 @@ if __name__ == "__main__":
                 args,
                 checkpoints_dir,
                 epsilon,
-                delta,
+                delta
             )
         else:
             losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
