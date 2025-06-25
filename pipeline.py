@@ -32,13 +32,13 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon=None, delta=None):
+def create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon=None):
     """Create organized results directory structure"""
     results_dir = f"results/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
     checkpoints_dir = f"checkpoints/{num_epochs}/{max_length}/{batch_size}/{learning_rate}"
-    if epsilon is not None and delta is not None:
-        results_dir += f"/epsilon_{epsilon}_delta_{delta:.3f}"
-        checkpoints_dir += f"/epsilon_{epsilon}_delta_{delta:.3f}"
+    if epsilon is not None:
+        results_dir += f"/epsilon_{epsilon}"
+        checkpoints_dir += f"/epsilon_{epsilon}"
 
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     delta = 1 / len(dataloader)  # Set delta based on the number of batches
 
     # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon, delta)
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, max_length, batch_size, learning_rate, epsilon)
 
     print(dataset.num_labels)
     model = get_model(args.model, num_labels=dataset.num_labels).to(device)
