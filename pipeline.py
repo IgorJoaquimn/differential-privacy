@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
     num_epochs = 10
     batch_size = 8
-    learning_rate = 1e-4
+    learning_rate = e-4
     max_length = 256
 
     # Create organized directory structure
