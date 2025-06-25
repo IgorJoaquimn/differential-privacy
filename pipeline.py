@@ -67,8 +67,8 @@ def train_with_privacy(
     num_epochs,
     args,
     checkpoints_dir,
-    epsilon=5.0,
-    delta=1e-5,
+    epsilon,
+    delta,
 ):
     privacy_engine = PrivacyEngine()
     model, optimizer, dataloader = privacy_engine.make_private_with_epsilon(
