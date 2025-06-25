@@ -71,7 +71,7 @@ def train_with_privacy(
         module=model,
         optimizer=optimizer,
         data_loader=dataloader,
-        noise_multiplier=1.0,  # TODO: adjust
+        noise_multiplier=0.8,
         max_grad_norm=1.0,
     )
 
@@ -79,10 +79,16 @@ def train_with_privacy(
     for epoch in range(num_epochs):
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
-        if epoch % 5 == 0 or epoch == num_epochs - 1:
+        curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
+
+        if epoch % 5 == 0 or epoch == num_epochs - 1 or curr_epsilon > 5.0:
             save_model(model, args, checkpoints_dir, epoch + 1)
-            curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
             print(f"Privacy spent: epsilon={curr_epsilon:.4f}, alpha={best_alpha:.4f}")
+
+            if curr_epsilon > 5.0: # Early stopping condition
+                print("Epsilon exceeded 5.0, stopping training.")
+                break
+
         print(
             f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
         )
