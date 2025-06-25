@@ -82,4 +82,6 @@ class TEMModel(nn.Module):
             p.requires_grad = False
 
     def forward(self, input_ids, attention_mask=None):
-        return self.model(input_ids=input_ids, attention_mask=attention_mask)
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        outputs = outputs.logits
+        return outputs
