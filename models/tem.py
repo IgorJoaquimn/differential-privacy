@@ -37,7 +37,7 @@ def get_metric_truncated_exponential_mechanism(
     similarity = torch.mm(vectors_norm, embed_norm.T)               # (B*T, V)
 
     # Sample Gumbel noise and add scaled noise
-    gumbel_noise = sample_gumbel(similarity.shape, similarity.device)
+    gumbel_noise = sample_gumbel(similarity.shape, device=similarity.device)
     noisy_scores = similarity + (2 / epsilon) * gumbel_noise            # (B*T, V)
 
     # Select index with maximum noisy score for each vector
@@ -54,14 +54,14 @@ class NoisyEmbedding(nn.Module):
     def __init__(self, original_embedding, epsilon=0.1):
         super().__init__()
         self.embedding = original_embedding
-        self.normalized_embedding = F.normalize(original_embedding, p=2, dim=1).weight           # (V, D)
+        self.normalized_embedding = F.normalize(original_embedding.weight, p=2, dim=1)           # (V, D)
         self.epsilon = epsilon
 
     def forward(self, input_ids):
         return get_metric_truncated_exponential_mechanism(
             self.embedding(input_ids),
             self.embedding.weight,
-            self.normalized_embedding.weight,
+            self.normalized_embedding.to(input_ids.device),
             self.epsilon,
         )
 
