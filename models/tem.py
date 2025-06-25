@@ -4,12 +4,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def sample_gumbel(shape, eps=1e-10):
+def sample_gumbel(shape, eps=1e-10, device=None):
     """Sample Gumbel noise with given shape."""
-    U = torch.rand(shape)
-    return -torch.log(-torch.log(U + eps) + eps)
+    U = torch.empty(shape, device=device).uniform_(eps, 1.0 - eps)
+    return -torch.log(-torch.log(U))
 
-def get_metric_truncated_exponential_mechanism(vectors: torch.Tensor, original_embedding: torch.Tensor, epsilon: float = 0.1) -> torch.Tensor:
+
+def get_metric_truncated_exponential_mechanism(
+    vectors: torch.Tensor,
+    original_embedding: torch.Tensor,
+    embed_norm: torch.Tensor,
+    epsilon: float = 0.1,
+) -> torch.Tensor:
     """
     Apply metric-based truncated exponential mechanism with Gumbel noise.
 
@@ -26,13 +32,12 @@ def get_metric_truncated_exponential_mechanism(vectors: torch.Tensor, original_e
 
     # Normalize vectors for cosine similarity
     vectors_norm = F.normalize(vectors.view(B * T, D), p=2, dim=1)     # (B*T, D)
-    embed_norm = F.normalize(original_embedding, p=2, dim=1)            # (V, D)
 
     # Compute cosine similarity between each vector and each embedding
-    similarity = torch.matmul(vectors_norm, embed_norm.T)               # (B*T, V)
+    similarity = torch.mm(vectors_norm, embed_norm.T)               # (B*T, V)
 
     # Sample Gumbel noise and add scaled noise
-    gumbel_noise = sample_gumbel(similarity.shape).to(similarity.device)
+    gumbel_noise = sample_gumbel(similarity.shape, similarity.device)
     noisy_scores = similarity + (2 / epsilon) * gumbel_noise            # (B*T, V)
 
     # Select index with maximum noisy score for each vector
@@ -44,14 +49,22 @@ def get_metric_truncated_exponential_mechanism(vectors: torch.Tensor, original_e
     # Reshape back to (B, T, D)
     return selected_vectors.view(B, T, D)
 
+
 class NoisyEmbedding(nn.Module):
     def __init__(self, original_embedding, epsilon=0.1):
         super().__init__()
         self.embedding = original_embedding
+        self.normalized_embedding = F.normalize(original_embedding, p=2, dim=1)            # (V, D)
         self.epsilon = epsilon
 
     def forward(self, input_ids):
-        return get_metric_truncated_exponential_mechanism(self.embedding(input_ids), self.embedding.weight, self.epsilon)
+        return get_metric_truncated_exponential_mechanism(
+            self.embedding(input_ids),
+            self.embedding.weight,
+            self.normalized_embedding.weight,
+            self.epsilon,
+        )
+
 
 class TEMModel(nn.Module):
     def __init__(self, num_labels=2, model_name="sentence-transformers/all-MiniLM-L6-v2", epsilon=5):
