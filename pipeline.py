@@ -85,13 +85,14 @@ def train_with_privacy(
     for epoch in range(num_epochs):
         loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
-        curr_epsilon, best_alpha = privacy_engine.get_privacy_spent(delta)
+
+        curr_epsilon = privacy_engine.accountant.get_epsilon(delta)
 
         if epoch % 5 == 0 or epoch == num_epochs - 1 or curr_epsilon > 5.0:
             save_model(model, args, checkpoints_dir, epoch + 1)
-            print(f"Privacy spent: epsilon={curr_epsilon:.4f}, alpha={best_alpha:.4f}")
+            print(f"Privacy spent: epsilon={curr_epsilon:.4f}")
         print(
-            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Best alpha: {best_alpha:.4f}"
+            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}"
         )
     
     return losses
