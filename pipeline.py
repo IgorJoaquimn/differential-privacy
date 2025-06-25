@@ -78,6 +78,7 @@ def train_with_privacy(
         target_delta=delta,
         target_epsilon=epsilon,
         epochs=num_epochs,
+        max_grad_norm=1.0
     )
 
     losses = []
