@@ -258,7 +258,7 @@ if __name__ == "__main__":
             fname = f"{results_dir}/{args.model}_private_losses.txt"
         with open(fname, "w") as f:
             for loss in losses:
-                f.write(f"{loss:.4f}\n")
+                f.write(f"{','.join(f'{val:.4f}' for val in loss)}\n")
 
     dataset = MovieDataset(train=False)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
