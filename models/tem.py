@@ -34,17 +34,17 @@ def get_metric_truncated_exponential_mechanism(
     vectors_norm = F.normalize(vectors.view(B * T, D), p=2, dim=1)     # (B*T, D)
 
     # Compute cosine similarity between each vector and each embedding
-    similarity = torch.mm(vectors_norm, embed_norm.T)               # (B*T, V)
+    similarity = torch.mm(vectors_norm, embed_norm.T)                  # (B*T, V)
+    
+    # Scale similarity by epsilon for privacy control
+    scaled_similarity = similarity * epsilon / 2
+    
+    # Use Gumbel softmax for differentiable sampling
+    # tau controls the temperature - lower tau = more discrete
+    weights = F.gumbel_softmax(scaled_similarity, tau=1.0, dim=1, hard=False)  # (B*T, V)
 
-    # Sample Gumbel noise and add scaled noise
-    gumbel_noise = sample_gumbel(similarity.shape, device=similarity.device)
-    noisy_scores = similarity + (2 / epsilon) * gumbel_noise            # (B*T, V)
-
-    # Select index with maximum noisy score for each vector
-    selected_indices = torch.argmax(noisy_scores, dim=1)                # (B*T,)
-
-    # Gather the selected embeddings by index
-    selected_vectors = original_embedding[selected_indices]              # (B*T, D)
+    # Weighted combination of embeddings
+    selected_vectors = torch.mm(weights, original_embedding) 
 
     # Reshape back to (B, T, D)
     return selected_vectors.view(B, T, D)
@@ -54,14 +54,14 @@ class NoisyEmbedding(nn.Module):
     def __init__(self, original_embedding, epsilon=0.1):
         super().__init__()
         self.embedding = original_embedding
-        self.normalized_embedding = F.normalize(original_embedding.weight, p=2, dim=1)           # (V, D)
         self.epsilon = epsilon
 
     def forward(self, input_ids):
+        embed_norm = F.normalize(self.embedding.weight, p=2, dim=1)
         return get_metric_truncated_exponential_mechanism(
             self.embedding(input_ids),
             self.embedding.weight,
-            self.normalized_embedding.to(input_ids.device),
+            embed_norm,
             self.epsilon,
         )
 

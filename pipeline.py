@@ -3,7 +3,6 @@ import os
 import torch
 from torch.optim import Adam
 from torch.nn import CrossEntropyLoss
-from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.metrics import f1_score, accuracy_score
@@ -32,10 +31,14 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
-def create_results_dir(num_epochs, batch_size, learning_rate, epsilon=None):
+def create_results_dir(num_epochs, batch_size, learning_rate, epsilon=None, folder="results"):
     """Create organized results directory structure"""
-    results_dir = f"results/{num_epochs}/{batch_size}/{learning_rate}"
-    checkpoints_dir = f"checkpoints/{num_epochs}/{batch_size}/{learning_rate}"
+    if(folder!= "results"):
+        results_dir = f"{folder}/results/{num_epochs}/{batch_size}/{learning_rate}"
+        checkpoints_dir = f"{folder}/checkpoints/{num_epochs}/{batch_size}/{learning_rate}"
+    else:
+        results_dir = f"results/{num_epochs}/{batch_size}/{learning_rate}"
+        checkpoints_dir = f"checkpoints/{num_epochs}/{batch_size}/{learning_rate}"
     if epsilon is not None:
         results_dir += f"/epsilon_{epsilon}"
         checkpoints_dir += f"/epsilon_{epsilon}"
@@ -46,12 +49,12 @@ def create_results_dir(num_epochs, batch_size, learning_rate, epsilon=None):
     return results_dir, checkpoints_dir
 
 
-def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir):
+def train(model, dataloader, optimizer, criterion, device, num_epochs, args, checkpoints_dir):
     losses = []
     accs = []
 
     for epoch in range(num_epochs):
-        loss, acc = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
+        loss, acc = train_epoch(model, dataloader, optimizer, criterion, device)
         losses.append(loss)
         accs.append(acc)
 
@@ -70,7 +73,6 @@ def train_with_privacy(
     dataloader,
     optimizer,
     criterion,
-    scheduler,
     device,
     num_epochs,
     args,
@@ -101,7 +103,7 @@ def train_with_privacy(
             max_physical_batch_size=max_physical_batch_size,
             optimizer=optimizer,
         ) as memory_safe_dataloader:
-            loss, acc = train_epoch(model, memory_safe_dataloader, optimizer, criterion, scheduler, device)
+            loss, acc = train_epoch(model, memory_safe_dataloader, optimizer, criterion, device)
         losses.append(loss)
         accs.append(acc)
 
@@ -121,7 +123,7 @@ def train_with_privacy(
     return losses, accs, epsilons
 
 
-def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
+def train_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
     y_true = []
@@ -129,6 +131,9 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
 
     for x, y, att_mask in tqdm(dataloader, desc="epoch"):
         x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
+
+        optimizer.zero_grad()
+
         logits = model(x, attention_mask=att_mask)
         loss = criterion(logits, y.long())
         total_loss += loss.item()
@@ -136,10 +141,8 @@ def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
         y_true.extend(y.cpu().tolist())
         y_pred.extend(predictions.cpu().tolist())
 
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        scheduler.step()
 
     acc = accuracy_score(y_true, y_pred)
 
@@ -200,12 +203,13 @@ if __name__ == "__main__":
         default="baseline",
         help="Pretrained model name",
     )
-    parser.add_argument("--eval", type=str, default=None, help="Test with give checkpoint.")
+    parser.add_argument("--eval", action="store_true", help="Evaluate the model instead of training")
     parser.add_argument("--run_private", action="store_true")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=1e-4, help="Learning rate for the optimizer")
     parser.add_argument("--target_epsilon", type=float, default=7.5, help="Target epsilon for differential privacy")
+    parser.add_argument("--folder", type=str, default="results", help="Folder to save results")
     args = parser.parse_args()
 
     print(f"Executing with arguments: {args}")
@@ -224,16 +228,17 @@ if __name__ == "__main__":
     delta = 1 / len(dataloader)  # Set delta based on the number of batches
 
     # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon)
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon, folder=args.folder)
 
     model = get_model(args.model, num_labels=dataset.num_labels, epsilon=epsilon).to(device)
 
-    optimizer = Adam(model.parameters(), lr=learning_rate, eps=1e-8)
+    optimizer = Adam(model.parameters(), lr=learning_rate)
     criterion = CrossEntropyLoss()
-    scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs*len(dataloader), eta_min=1e-6)
 
     if args.eval:
-        model.load_state_dict(torch.load(args.eval, map_location=device))
+        base_name = f"private_{args.model}" if args.run_private else args.model
+        fname = f"{checkpoints_dir}/{base_name}.pt"
+        model.load_state_dict(torch.load(fname, map_location=device))
     else:
         if args.run_private:
             losses = train_with_privacy(
@@ -241,7 +246,6 @@ if __name__ == "__main__":
                 dataloader,
                 optimizer,
                 criterion,
-                scheduler,
                 device,
                 num_epochs,
                 args,
@@ -250,7 +254,7 @@ if __name__ == "__main__":
                 delta
             )
         else:
-            losses = train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir)
+            losses = train(model, dataloader, optimizer, criterion, device, num_epochs, args, checkpoints_dir)
 
         # Save losses to text file in results directory
         fname = f"{results_dir}/{args.model}_losses.txt"
