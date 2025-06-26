@@ -224,7 +224,7 @@ if __name__ == "__main__":
     delta = 1 / len(dataloader)  # Set delta based on the number of batches
 
     # Create organized directory structure
-    results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon if args.run_private else None)
+    results_dir, checkpoints_dir = create_results_dir(num_epochs, batch_size, learning_rate, epsilon)
 
     model = get_model(args.model, num_labels=dataset.num_labels, epsilon=epsilon).to(device)
 
