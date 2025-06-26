@@ -98,3 +98,12 @@ class TEMModel(nn.Module):
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         outputs = outputs.logits
         return outputs
+    
+    def get_embeddings(self, input_ids):
+        """
+        Recebe input_ids e retorna o embedding tensor correspondente (com ruído aplicado).
+        """
+        # Passa os ids pelo embedding (que já está modificado com ruído)
+        embeddings = self.model.get_input_embeddings()(input_ids)
+        return embeddings
+    
