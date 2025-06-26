@@ -48,18 +48,25 @@ def create_results_dir(num_epochs, batch_size, learning_rate, epsilon=None):
 
 def train(model, dataloader, optimizer, criterion, scheduler, device, num_epochs, args, checkpoints_dir):
     losses = []
+    accs = []
+
     for epoch in range(num_epochs):
-        loss = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
+        loss, acc = train_epoch(model, dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
+        accs.append(acc)
+
         if epoch % 5 == 0 or epoch == num_epochs - 1:
-            save_model(model, args, checkpoints_dir, epoch + 1)  # Pass checkpoints_dir
-        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
+            try:
+                save_model(model, args, checkpoints_dir)  # Pass checkpoints_dir
+            except:
+                pass
+        print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Accuracy: {acc:.4f}")
     
-    return losses
+    return losses, accs
 
 
 def train_with_privacy(
-    model,
+    original_model,
     dataloader,
     optimizer,
     criterion,
@@ -70,12 +77,12 @@ def train_with_privacy(
     checkpoints_dir,
     epsilon,
     delta,
-    max_grad_norm=0.1,
+    max_grad_norm=1.0,
     max_physical_batch_size=8,
 ):
     privacy_engine = PrivacyEngine()
     model, optimizer, dataloader = privacy_engine.make_private_with_epsilon(
-        module=model,
+        module=original_model,
         optimizer=optimizer,
         data_loader=dataloader,
         target_delta=delta,
@@ -85,43 +92,58 @@ def train_with_privacy(
     )
 
     losses = []
+    accs = []
+    epsilons = []
+    
     for epoch in range(num_epochs):
         with BatchMemoryManager(
             data_loader=dataloader,
             max_physical_batch_size=max_physical_batch_size,
             optimizer=optimizer,
         ) as memory_safe_dataloader:
-            loss = train_epoch(model, memory_safe_dataloader, optimizer, criterion, scheduler, device)
+            loss, acc = train_epoch(model, memory_safe_dataloader, optimizer, criterion, scheduler, device)
         losses.append(loss)
+        accs.append(acc)
 
         curr_epsilon = privacy_engine.accountant.get_epsilon(delta)
+        epsilons.append(curr_epsilon)
 
         if epoch % 5 == 0 or epoch == num_epochs - 1 or curr_epsilon > 5.0:
-            save_model(model, args, checkpoints_dir, epoch + 1)
+            try:
+                save_model(original_model, args, checkpoints_dir)
+            except:
+                pass
             print(f"Privacy spent: epsilon={curr_epsilon:.4f}")
         print(
-            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}"
+            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}, Current epsilon: {curr_epsilon:.4f}, Accuracy: {acc:.4f}"
         )
     
-    return losses
+    return losses, accs, epsilons
 
 
 def train_epoch(model, dataloader, optimizer, criterion, scheduler, device):
     model.train()
     total_loss = 0.0
+    y_true = []
+    y_pred = []
 
     for x, y, att_mask in tqdm(dataloader, desc="epoch"):
         x, y, att_mask = x.to(device), y.to(device), att_mask.to(device)
         logits = model(x, attention_mask=att_mask)
         loss = criterion(logits, y.long())
         total_loss += loss.item()
+        predictions = logits.argmax(dim=1)
+        y_true.extend(y.cpu().tolist())
+        y_pred.extend(predictions.cpu().tolist())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         scheduler.step()
 
-    return total_loss / len(dataloader)
+    acc = accuracy_score(y_true, y_pred)
+
+    return total_loss / len(dataloader), acc
 
 
 def evaluate(model, dataloader, device):
@@ -143,16 +165,10 @@ def evaluate(model, dataloader, device):
     return acc, f1
 
 
-def save_model(model, args, checkpoints_dir, epoch=None):
+def save_model(model, args, checkpoints_dir):
     # Create filename based on whether it's a checkpoint or final model
-    if epoch is not None:
-        # For epoch checkpoints
-        base_name = f"private_{args.model}" if args.run_private else args.model
-        fname = f"{checkpoints_dir}/{base_name}_epoch_{epoch}.pt"
-    else:
-        # For final model
-        base_name = f"private_{args.model}" if args.run_private else args.model
-        fname = f"{checkpoints_dir}/{base_name}.pt"
+    base_name = f"private_{args.model}" if args.run_private else args.model
+    fname = f"{checkpoints_dir}/{base_name}.pt"
     
     torch.save(model.state_dict(), fname)
     print(f"Model saved to {fname}")
